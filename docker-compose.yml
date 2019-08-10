@@ -1,0 +1,75 @@
+version: "3.7"
+
+volumes:
+  frontend_build: {}
+  node_modules: {}
+  yarn_cache: {}
+  gradle_cache: {}
+  gradle_api_cache: {}
+  gradle_api_build_cache: {}
+  pip_cache: {}
+
+services:
+  api:
+    image: gradle:5.5
+    working_dir: /home/sa-api
+    ports:
+      - 8080:8080
+    volumes:
+      - gradle_cache:/home/gradle/.gradle
+      - gradle_api_cache:/home/sa-api/.gradle
+      - gradle_api_build_cache:/home/sa-api/build
+      - ./services/api/src:/home/sa-api/src:ro
+      - ./services/api/build.gradle.kts:/home/sa-api/build.gradle.kts:ro
+      - ./services/api/gradle.properties:/home/sa-api/gradle.properties:ro
+      - ./services/api/settings.gradle:/home/sa-api/settings.gradle:ro
+    entrypoint: gradle
+    command: run --args='--com.sa.logic.url=http://logic:5000'
+
+  frontend-builder:
+    image: node:12-alpine
+    working_dir: /home/sa-frontend
+    volumes:
+      - yarn_cache:/home/.yarn
+      - node_modules:/home/sa-frontend/node_modules
+      - frontend_build:/home/sa-frontend/build
+      - ./services/frontend/public:/home/sa-frontend/public:ro
+      - ./services/frontend/src:/home/sa-frontend/src:ro
+      - ./services/frontend/package.json:/home/sa-frontend/package.json:ro
+      - ./services/frontend/yarn.lock:/home/sa-frontend/yarn.lock:ro
+    environment:
+      - YARN_CACHE_FOLDER=/home/.yarn
+      - REACT_APP_API_URL=http://localhost:8080
+    entrypoint: sh -c
+    command: |-
+      "
+      apk update && apk add yarn
+      yarn install --pure-lockfile --prefer-offline
+      yarn build
+      "
+
+  frontend:
+    image: nginx:1.17-alpine
+    ports:
+      - 80:80
+    volumes:
+      - frontend_build:/usr/share/nginx/html:ro
+
+  logic:
+    image: python:3-alpine
+    working_dir: /home/sa-logic
+    ports:
+      - 5000:5000
+    volumes:
+      - pip_cache:/home/.pip
+      - ./services/logic/nltk_data:/usr/share/nltk_data:ro
+      - ./services/logic/requirements.txt:/home/sa-logic/requirements.txt:ro
+      - ./services/logic/main.py:/home/sa-logic/main.py
+    environment:
+      - NLTK_DATA=/usr/share/nltk_data
+    entrypoint: sh -c
+    command: |-
+      "
+      python -m pip install --cache-dir=/home/.pip -r requirements.txt
+      python main.py
+      "

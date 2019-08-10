@@ -1,0 +1,25 @@
+version: "3.7"
+
+services:
+  api:
+    image: sa/api
+    build:
+      context: ./services/api
+    ports:
+      - 8080:8080
+    environment:
+      - SA_LOGIC_URL=${SA_LOGIC_URL:-http://logic:5000}
+
+  frontend:
+    image: sa/frontend
+    build:
+      context: ./services/frontend
+      args:
+        - REACT_APP_SA_API_URL=${REACT_APP_SA_API_URL:-http://localhost:8080}
+    ports:
+      - 80:80
+
+  logic:
+    image: sa/logic
+    build:
+      context: ./services/logic
